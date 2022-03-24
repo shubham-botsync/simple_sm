@@ -3,9 +3,12 @@
 import rospy
 import smach
 import smach_ros
+from actionlib import *
+from actionlib_msgs import *
+from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 
 
-class NavFwd(smach.State):
+class IDLE(smach.State):
 
     def __init__(self):
         smach.State.__init__(self, outcomes=['pass', 'fail'])
@@ -17,44 +20,48 @@ class NavFwd(smach.State):
         return 'pass'
 
 
-class NavRev(smach.State):
-
-    def __init__(self):
-        smach.State.__init__(self, outcomes=['pass', 'fail'])
-
-    def execute(self, userdata):
-
-        rospy.loginfo('Executing RevNavigation!\n')
-        rospy.sleep(1.0)
-        return 'pass'
-
-
 def main():
 
     rospy.init_node('simple_sm_node')
 
-    sm = smach.StateMachine(outcomes=['SM_PASS', 'SM_FAIL'])
+    sm = smach.StateMachine(outcomes=['succeeded', 'aborted', 'preempted'])
 
     with sm:
 
-        smach.StateMachine.add('NAV_FWD', NavFwd(),
-                               transitions={'pass': 'NAV_REV',
-                                            'fail': 'NAV_FWD'})
+        goal_ = MoveBaseGoal()
 
-        smach.StateMachine.add('NAV_REV', NavRev(),
-                               transitions={'pass': 'NAV_FWD',
-                                            'fail': 'NAV_REV'})
+        goal_.target_pose.header.frame_id = "bi_tf/map"
+        goal_.target_pose.pose.position.x = 3.19812631607
+        goal_.target_pose.pose.position.y = -4.74170589447
+        goal_.target_pose.pose.orientation.x = 0
+        goal_.target_pose.pose.orientation.y = 0
+        goal_.target_pose.pose.orientation.z = -0.17400141277
+        goal_.target_pose.pose.orientation.w = 0.984745402809
 
-    # Create and start the introspection server
-    sis = smach_ros.IntrospectionServer('server_name', sm, '/SM_ROOT')
-    sis.start()
+        '''
+        smach.StateMachine.add('STATE_ONE',
+                               smach_ros.SimpleActionState('bi',
+                                                           MoveBaseAction, goal=goal_),
+                               transitions={'succeeded': 'STATE_ONE'})
+        '''
 
-    # Execute the state machine
-    outcome = sm.execute()
+        ''''
+        smach.StateMachine.add('GOAL_DEFAULT',
+                               smach_ros.SimpleActionState(
+                                   'bi/move_base', MoveBaseAction),
+                               {'succeeded': 'GOAL_DEFAULT', 'aborted': 'GOAL_DEFAULT'})
+        '''
 
-    # Wait for ctrl-c to stop the application
+        smach.StateMachine.add('GOAL_STATIC',
+                               smach_ros.SimpleActionState('bi/move_base', MoveBaseAction,
+                                                           goal=goal_),
+                               {'aborted': 'GOAL_STATIC'})
+
+    sm.execute()
+
     rospy.spin()
-    sis.stop()
+
+    rospy.signal_shutdown('All done.')
 
 
 if __name__ == '__main__':
