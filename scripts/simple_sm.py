@@ -8,15 +8,36 @@ from actionlib_msgs import *
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 
 
-class IDLE(smach.State):
+class Idle(smach.State):
 
     def __init__(self):
-        smach.State.__init__(self, outcomes=['pass', 'fail'])
+
+        smach.State.__init__(self, outcomes=['pass'])
+
+        rospy.loginfo('Initializing IDLE State!\n')
+        self.time_counter = 0
 
     def execute(self, userdata):
 
-        rospy.loginfo('Executing FwdNavigation!\n')
-        rospy.sleep(1.0)
+        rospy.loginfo('IDLE!\n')
+
+        while self.time_counter < 4:
+            self.time_counter += 1
+            rospy.sleep(1.0)
+
+            if self.time_counter == 5:
+                return 'pass'
+
+
+class Navigation(smach.State):
+
+    def __init__(self):
+        smach.State.__init__(self, outcomes=['pass'])
+
+    def execute(self, userdata):
+
+        #rospy.loginfo('Executing FwdNavigation!\n')
+        # rospy.sleep(1.0)
         return 'pass'
 
 
@@ -24,8 +45,9 @@ def main():
 
     rospy.init_node('simple_sm_node')
 
-    sm = smach.StateMachine(outcomes=['succeeded', 'aborted', 'preempted'])
+    sm = smach.StateMachine(outcomes=['sm_pass', 'sm_fail'])
 
+    '''
     with sm:
 
         goal_ = MoveBaseGoal()
@@ -38,29 +60,43 @@ def main():
         goal_.target_pose.pose.orientation.z = -0.17400141277
         goal_.target_pose.pose.orientation.w = 0.984745402809
 
-        '''
         smach.StateMachine.add('STATE_ONE',
                                smach_ros.SimpleActionState('bi',
                                                            MoveBaseAction, goal=goal_),
                                transitions={'succeeded': 'STATE_ONE'})
-        '''
 
-        ''''
         smach.StateMachine.add('GOAL_DEFAULT',
                                smach_ros.SimpleActionState(
                                    'bi/move_base', MoveBaseAction),
                                {'succeeded': 'GOAL_DEFAULT', 'aborted': 'GOAL_DEFAULT'})
-        '''
 
         smach.StateMachine.add('GOAL_STATIC',
                                smach_ros.SimpleActionState('bi/move_base', MoveBaseAction,
                                                            goal=goal_),
                                {'aborted': 'GOAL_STATIC'})
 
-    sm.execute()
+        '''
+
+    with sm:
+
+        smach.StateMachine.add('IDLE', Idle(),
+                               transitions={'pass': 'NAVIGATION'}
+                               )
+
+        smach.StateMachine.add('NAVIGATION', Navigation(),
+                               transitions={'pass': 'IDLE'}
+                               )
+
+    # Introspection Server
+    sis = smach_ros.IntrospectionServer('server_name', sm, '/SM_ROOT')
+
+    sis.start()
+
+    outcome = sm.execute()
 
     rospy.spin()
 
+    # sis.stop()
     rospy.signal_shutdown('All done.')
 
 
